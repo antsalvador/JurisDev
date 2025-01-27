@@ -109,7 +109,7 @@ services:
   redis:
     image: redis:6.2-bookworm
     ports:
-      - "127.0.0.1:6379:6379"
+      - "${REDIS_HOST:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
     restart: unless-stopped
     volumes:
       - redis_data:/data
