@@ -230,6 +230,21 @@ export function populateFilters(filters: SearchFilters, body: Partial<Record<str
             }
         });
     }
+    //Lógica backend do calendário
+    if (body.DataExata) {
+        const selectedDate = Array.isArray(body.DataExata) ? body.DataExata[0] : body.DataExata;
+        if (selectedDate) {
+            // Converter yyyy-MM-dd para dd/MM/yyyy 
+            const [year, month, day] = selectedDate.split('-');
+            const formattedDate = `${day}/${month}/${year}`;
+            filtersUsed["Data"] = [formattedDate];
+            filters.pre.push({
+                term: {
+                    [DATA_FIELD]: formattedDate
+                }
+            });
+        }
+    }
     return filtersUsed;
 }
 
