@@ -4,6 +4,7 @@ volumes:
   excel_data: {}
   rss_data: {}
   redis_data: {}
+  node_modules_dev: {}
 
 services:
   server:
@@ -24,6 +25,7 @@ services:
     volumes:
       - excel_data:/usr/src/app/files
       - rss_data:/rss
+      - .:/app
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -44,10 +46,11 @@ services:
       PUBLIC_STATES: ${PUBLIC_STATES}
       RSS_FOLDER: /rss
     ports:
-      - "${SERVER_DEV_HOST:-127.0.0.1}:${SERVER_DEV_PORT:-3000}:3000"
+      - "${SERVER_DEV_HOST:-127.0.0.1}:3001:3000"
     volumes:
       - excel_data:/usr/src/app/files
       - .:/usr/src/app
+      - /usr/src/app/node_modules
       - rss_data:/rss
     depends_on:
       elasticsearch:
