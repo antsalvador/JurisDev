@@ -345,6 +345,20 @@ function FilterList({
         setDatalist([]);
     }, [resetTrigger]);
 
+    // Add automatic mapping function for Secção to Área
+    const areaFromSeccao = (seccao: string) => {
+        const map: Record<string, string> = {
+            "1.ª Secção (Cível)": "Área Cível",
+            "2.ª Secção (Cível)": "Área Cível",
+            "3.ª Secção (Criminal)": "Área Criminal",
+            "4.ª Secção (Social)": "Área Social",
+            "5.ª Secção (Criminal)": "Área Criminal",
+            "6.ª Secção (Cível)": "Área Cível",
+            "7.ª Secção (Cível)": "Área Cível",
+        };
+        return map[seccao] || "";
+    };
+
     return (
         <div className="d-flex flex-column my-1 border pb-1 flex-grow-1">
             <datalist id={datalistId}>
@@ -362,6 +376,23 @@ function FilterList({
                 onFocus={() => {
                     if (!dontSuggest && datalist.length === 0) {
                         loadDatalist(router, accessKey, searchParams, setDatalist);
+                    }
+                }}
+                onChange={e => {
+                    // If this is the Secção input, auto-set Área
+                    if (accessKey === "Secção") {
+                        const area = areaFromSeccao(e.target.value.replace(/"/g, ""));
+                        if (area) {
+                            const form = e.target.form;
+                            if (form) {
+                                const areaInput = form.querySelector('input[name="Área"]') as HTMLInputElement;
+                                if (areaInput) {
+                                    areaInput.value = area;
+                                    // Trigger change event for Área
+                                    areaInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                }
+                            }
+                        }
                     }
                 }}
             />
