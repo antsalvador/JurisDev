@@ -277,11 +277,11 @@ export function createQueryDslQueryContainer(string?: string | string[]): QueryD
             match_all: {}
         };
     }
+    // Use query_string to support AND, OR, NOT, and parentheses in free text search
     return [{
-        simple_query_string: {
+        query_string: {
             query: Array.isArray(string) ? string.join(" ") : string,
-            fields: ["*"],
-            default_operator: 'OR'
+            fields: ["*"]
         }
     }];
 }

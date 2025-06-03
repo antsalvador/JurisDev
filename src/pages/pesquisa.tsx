@@ -41,11 +41,35 @@ export default function Pesquisa(props: PesquisaProps){
     const searchParams = useSearchParams();
     const [resultsPerPage, setResultsPerPage] = useState<string>("10");
     const [page, setPage] = useState<number>(0);
-    const results = useFetch<SearchHandlerResponse>(`/api/search?${searchParams}&rpp=${resultsPerPage}&page=${page}`,[])
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [advancedRows, setAdvancedRows] = useState([{ op: "", term: "" }]);
+    const freeTextParam = searchParams.get("q") || "";
+    const [freeText, setFreeText] = useState(freeTextParam);
+    const results = useFetch<SearchHandlerResponse>(`/api/search?${searchParams}&rpp=${resultsPerPage}&page=${page}&q=${encodeURIComponent(freeText)}`,[])
 
     function handleRppChange(e: React.ChangeEvent<HTMLSelectElement>) {
         setResultsPerPage(e.target.value);
         setPage(0); // Reset to first page when changing rpp
+    }
+
+    // Advanced search logic
+    function handleAdvancedChange(idx: number, field: "op" | "term", value: string) {
+        setAdvancedRows(rows => rows.map((row, i) => i === idx ? { ...row, [field]: value } : row));
+    }
+    function addAdvancedRow() {
+        setAdvancedRows(rows => [...rows, { op: "AND", term: "" }]);
+    }
+    function removeAdvancedRow(idx: number) {
+        setAdvancedRows(rows => rows.length > 1 ? rows.filter((_, i) => i !== idx) : rows);
+    }
+    function buildAdvancedQuery() {
+        return advancedRows.map((row, i) => `${i > 0 ? row.op : ""} ${row.term}`.trim()).join(" ").replace(/ +/g, " ");
+    }
+    function handleAdvancedApply() {
+        setFreeText(buildAdvancedQuery());
+    }
+    function handleFreeTextChange(e: React.ChangeEvent<HTMLInputElement>) {
+        setFreeText(e.target.value);
     }
 
     // Calculate number of pages based on resultsPerPage and props.count
@@ -69,12 +93,16 @@ export default function Pesquisa(props: PesquisaProps){
             </SelectNavigate>
             {props.searchId ? <i className="bi bi-share" title="Partilhar" role="button" onClick={onClickShare} data-id={props.searchId}></i> : ""}
         </div>
-        {results ? 
-            results.length > 0 ? 
-                <ShowResults results={results} searchParams={searchParams} searchInfo={{...props, pages}} page={page} setPage={setPage} /> :
-                <NoResults /> :
-            <Loading />
-        }
+        <div className="row">
+            <div className="col-md-9">
+                {results ? 
+                    results.length > 0 ? 
+                        <ShowResults results={results} searchParams={searchParams} searchInfo={{...props, pages}} page={page} setPage={setPage} /> :
+                        <NoResults /> :
+                    <Loading />
+                }
+            </div>
+        </div>
     </GenericPageWithForm>
 }
 

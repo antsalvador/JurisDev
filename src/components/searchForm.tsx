@@ -43,7 +43,6 @@ export default function SearchForm({ count, filtersUsed, minAno, maxAno }: { cou
                 submit(element, router);
                 let valueDataInicio = dataInicio.current?.value;
                 let valueDataFim = dataFim.current?.value;
-                form.current?.reset();
                 if (dataInicio.current && valueDataInicio) dataInicio.current.value = valueDataInicio;
                 if (dataFim.current && valueDataFim) dataFim.current.value = valueDataFim;
             } else {
@@ -61,6 +60,51 @@ export default function SearchForm({ count, filtersUsed, minAno, maxAno }: { cou
     const term = search.get("term");
     const group = search.get("group");
     const keys = useKeysFromContext();
+    // Advanced search state
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [advancedRows, setAdvancedRows] = useState([{ op: "", term: q || "" }]);
+    const [freeText, setFreeText] = useState(q || "");
+
+    function handleAdvancedChange(idx: number, field: "op" | "term", value: string) {
+        console.log('Advanced Change:', { idx, field, value });
+        setAdvancedRows(rows => {
+            const newRows = rows.map((row, i) => i === idx ? { ...row, [field]: value } : row);
+            console.log('New Advanced Rows:', newRows);
+            return newRows;
+        });
+    }
+    function addAdvancedRow() {
+        setAdvancedRows(rows => [...rows, { op: "AND", term: "" }]);
+    }
+    function removeAdvancedRow(idx: number) {
+        setAdvancedRows(rows => rows.length > 1 ? rows.filter((_, i) => i !== idx) : rows);
+    }
+    function buildAdvancedQuery() {
+        const query = advancedRows.map((row, i) => {
+            if (i === 0) return row.term;
+            if (row.op === "NOT") return `AND NOT ${row.term}`;
+            return `${row.op} ${row.term}`;
+        }).join(" ").replace(/ +/g, " ");
+        console.log('Built Query:', query);
+        return query;
+    }
+    function handleAdvancedApply() {
+        const query = buildAdvancedQuery();
+        console.log('Applying Query:', query);
+        setFreeText(query);
+        // Also update the input value in the form
+        const input = form.current?.querySelector('input[name="q"]') as HTMLInputElement;
+        if (input) {
+            input.value = query;
+            console.log('Updated input value:', input.value);
+        }
+        // Trigger form submit
+        form.current?.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    function handleFreeTextChange(e: React.ChangeEvent<HTMLInputElement>) {
+        setFreeText(e.target.value);
+        setAdvancedRows([{ op: "", term: e.target.value }]);
+    }
 
     return (
         <form ref={form} method="get" style={{ top: 0 }} className="position-sticky">
@@ -82,8 +126,56 @@ export default function SearchForm({ count, filtersUsed, minAno, maxAno }: { cou
                 </div>
                 <div className="d-flex my-1 pb-1 align-items-baseline">
                     <small className="pe-1 text-white"><i className="bi bi-dash"></i></small>
-                    <input type="search" className="form-control form-control-sm rounded-0" name="q" placeholder="Texto Livre" defaultValue={q || ""} />
+                    <div className="w-100">
+                        <input type="search" className="form-control form-control-sm rounded-0" name="q" placeholder="Texto Livre" defaultValue={q || ""} onChange={handleFreeTextChange} />
+                        <span
+                            className="text-primary fw-semibold cursor-pointer user-select-none"
+                            style={{ textDecoration: showAdvanced ? 'underline' : 'none', transition: 'text-decoration 0.2s', display: 'inline-block', marginTop: '2px' }}
+                            tabIndex={0}
+                            role="button"
+                            onClick={() => setShowAdvanced(v => !v)}
+                            onKeyPress={e => { if (e.key === 'Enter' || e.key === ' ') setShowAdvanced(v => !v); }}
+                            onMouseOver={e => (e.currentTarget.style.textDecoration = 'underline')}
+                            onMouseOut={e => (e.currentTarget.style.textDecoration = showAdvanced ? 'underline' : 'none')}
+                        >
+                            {showAdvanced ? "Ocultar Pesquisa Avançada" : "Pesquisa Avançada"}
+                        </span>
+                    </div>
                 </div>
+                {showAdvanced && (
+                    <div className="border rounded p-2 bg-light small mb-2" style={{ maxWidth: 350, margin: '0 auto' }}>
+                        {advancedRows.map((row, idx) => {
+                            // Ensure op is always valid for dropdown
+                            const validOps = ["AND", "OR", "NOT"];
+                            const opValue = validOps.includes(row.op) ? row.op : "AND";
+                            return (
+                                <div className="d-flex align-items-center mb-1" key={idx}>
+                                    {idx > 0 && (
+                                        <select className="form-select form-select-sm w-auto me-1" value={opValue} onChange={e => handleAdvancedChange(idx, "op", e.target.value)}>
+                                            <option value="AND">E</option>
+                                            <option value="OR">OU</option>
+                                            <option value="NOT">NÃO</option>
+                                        </select>
+                                    )}
+                                    <input
+                                        type="text"
+                                        className="form-control form-control-sm me-1"
+                                        placeholder="Termo"
+                                        value={row.term}
+                                        onChange={e => handleAdvancedChange(idx, "term", e.target.value)}
+                                    />
+                                    {advancedRows.length > 1 && (
+                                        <button className="btn btn-danger btn-sm" type="button" onClick={() => removeAdvancedRow(idx)} title="Remover"><i className="bi bi-trash"></i></button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        <div className="d-flex justify-content-between mt-2">
+                            <button className="btn btn-secondary btn-sm me-1" type="button" onClick={addAdvancedRow}>+</button>
+                            <button className="btn btn-primary btn-sm" type="button" onClick={handleAdvancedApply}>Aplicar</button>
+                        </div>
+                    </div>
+                )}
                 <div className="d-flex my-1 pb-1 align-items-baseline">
                     <small className="pe-1 text-white"><i className="bi bi-dash"></i></small>
                     <div className="input-group input-group-sm">
