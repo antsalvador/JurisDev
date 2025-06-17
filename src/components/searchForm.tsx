@@ -8,6 +8,8 @@ import { Dispatch, DragEventHandler, SetStateAction, useCallback, useEffect, use
 import { FORM_KEY, useFormOrderedKeys } from "./formKeys";
 import { replaceSearchParams } from "./select-navigate";
 import { useKeysFromContext } from "@/contexts/keys";
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import Tooltip from 'react-bootstrap/Tooltip';
 
 function submit(form: HTMLFormElement, router: AppRouterInstance) {
     const fd = new FormData(form);
@@ -144,35 +146,76 @@ export default function SearchForm({ count, filtersUsed, minAno, maxAno }: { cou
                 </div>
                 {showAdvanced && (
                     <div className="border rounded p-2 bg-light small mb-2" style={{ maxWidth: 350, margin: '0 auto' }}>
+                        <div className="d-flex align-items-center mb-2">
+                            <span className="fw-semibold">Pesquisa Avançada</span>
+                            <OverlayTrigger
+                                placement="right"
+                                overlay={
+                                    <Tooltip id="advanced-help-tooltip">
+                                        <div><b>E</b>: ambos os termos devem aparecer.<br/><b>OU</b>: pelo menos um termo.<br/><b>NÃO</b>: exclui resultados com o termo.</div>
+                                    </Tooltip>
+                                }
+                            >
+                                <i className="bi bi-question-circle advanced-help-icon" tabIndex={0} aria-label="Ajuda sobre operadores" />
+                            </OverlayTrigger>
+                        </div>
                         {advancedRows.map((row, idx) => {
                             // Ensure op is always valid for dropdown
                             const validOps = ["AND", "OR", "NOT"];
                             const opValue = validOps.includes(row.op) ? row.op : "AND";
                             return (
-                                <div className="d-flex align-items-center mb-1" key={idx}>
-                                    {idx > 0 && (
-                                        <select className="form-select form-select-sm w-auto me-1" value={opValue} onChange={e => handleAdvancedChange(idx, "op", e.target.value)}>
-                                            <option value="AND">E</option>
-                                            <option value="OR">OU</option>
-                                            <option value="NOT">NÃO</option>
-                                        </select>
-                                    )}
+                                <div className="d-flex align-items-center mb-1 advanced-row-hover" key={idx}>
                                     <input
                                         type="text"
                                         className="form-control form-control-sm me-1"
                                         placeholder="Termo"
                                         value={row.term}
                                         onChange={e => handleAdvancedChange(idx, "term", e.target.value)}
+                                        style={{ flex: 1 }}
+                                        tabIndex={0}
                                     />
+                                    {idx > 0 && (
+                                        <OverlayTrigger
+                                            placement="top"
+                                            overlay={<Tooltip id={`op-tooltip-${idx}`}>Escolha o operador lógico</Tooltip>}
+                                        >
+                                            <select
+                                                className="form-select form-select-sm ms-1 me-1"
+                                                value={opValue}
+                                                onChange={e => handleAdvancedChange(idx, "op", e.target.value)}
+                                                style={{ width: 70 }}
+                                                tabIndex={0}
+                                                aria-label="Operador lógico"
+                                            >
+                                                <option value="AND">E</option>
+                                                <option value="OR">OU</option>
+                                                <option value="NOT">NÃO</option>
+                                            </select>
+                                        </OverlayTrigger>
+                                    )}
                                     {advancedRows.length > 1 && (
-                                        <button className="btn btn-danger btn-sm" type="button" onClick={() => removeAdvancedRow(idx)} title="Remover"><i className="bi bi-trash"></i></button>
+                                        <OverlayTrigger
+                                            placement="top"
+                                            overlay={<Tooltip id={`trash-tooltip-${idx}`}>Remover termo</Tooltip>}
+                                        >
+                                            <button
+                                                className="btn btn-danger btn-sm ms-1"
+                                                type="button"
+                                                onClick={() => removeAdvancedRow(idx)}
+                                                title="Remover"
+                                                tabIndex={0}
+                                                aria-label="Remover termo"
+                                            >
+                                                <i className="bi bi-trash"></i>
+                                            </button>
+                                        </OverlayTrigger>
                                     )}
                                 </div>
                             );
                         })}
                         <div className="d-flex justify-content-between mt-2">
-                            <button className="btn btn-secondary btn-sm me-1" type="button" onClick={addAdvancedRow}>+</button>
-                            <button className="btn btn-primary btn-sm" type="button" onClick={handleAdvancedApply}>Aplicar</button>
+                            <button className="btn btn-secondary btn-sm me-1" type="button" onClick={addAdvancedRow} style={{ minWidth: 36 }} tabIndex={0} aria-label="Adicionar termo">+</button>
+                            <button className="btn btn-primary btn-sm" type="button" onClick={handleAdvancedApply} style={{ minWidth: 80 }} tabIndex={0} aria-label="Aplicar pesquisa">Aplicar</button>
                         </div>
                     </div>
                 )}

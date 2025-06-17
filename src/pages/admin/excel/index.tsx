@@ -7,13 +7,19 @@ import { ExcelFile, ExcelState, FileState } from "@/types/excel";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useEffect, useRef, useState } from "react";
+import NormalizationDashboard from "@/components/NormalizationDashboard";
+import AnalyticsDashboard from "@/components/AnalyticsDashboard";
 
 export const getServerSideProps = withAuthentication<{}>(async ctx => {
     LoggerServerSideProps(ctx);
     return {props: {}}
 })
 
-const intl = new Intl.DateTimeFormat("pt-PT", {dateStyle: "short", timeStyle: "long"})
+const intl = new Intl.DateTimeFormat("pt-PT", {
+    dateStyle: "short",
+    timeStyle: "long",
+    timeZone: "UTC"
+})
 
 export default function ExcelPage(){
     const keysParentRef = useRef<HTMLFormElement>(null);
@@ -164,6 +170,8 @@ export default function ExcelPage(){
                 </div>
             </div>
         </div>
+            <AnalyticsDashboard />
+            <NormalizationDashboard />
     </DashboardGenericPage>
 }
 

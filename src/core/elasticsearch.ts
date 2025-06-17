@@ -119,28 +119,61 @@ export function populateFilters(filters: SearchFilters, body: Partial<Record<str
             let should = filtersUsed[aggName].filter(o => !o.startsWith("not:"))
             let must_not = filtersUsed[aggName].filter(o => o.startsWith("not:")).map(o => o.substring(4))
             let must_or_should = !isJurisprudenciaDocumentGenericKey(aggName) || body["_should"]?.includes(aggName) ? "should" : "must"  // AND or OR - if a signle value use alawys OR else default OR but flag for AND
-            filters[when].push({
-                bool: {
-                    [must_or_should]: should.map(o => (o.startsWith("\"") && o.endsWith("\"") ? {
-                        term: {
-                            [fieldName.replace("keyword", "raw")]: { value: `${o.slice(1, -1)}` }
-                        }
-                    } : {
-                        wildcard: {
-                            [fieldName]: { value: `*${o}*` }
-                        }
-                    })),
-                    must_not: must_not.map(o => (o.startsWith("\"") && o.endsWith("\"") ? {
-                        term: {
-                            [fieldName.replace("keyword", "raw")]: { value: `${o.slice(1, -1)}` }
-                        }
-                    } : {
-                        wildcard: {
-                            [fieldName]: { value: `*${o}*` }
-                        }
-                    }))
-                }
-            });
+
+            // Detect advanced operators in any value
+            const hasAdvanced = (arr: string[]) => arr.some(v => /[\(\)\"\bAND\b|\bOR\b|\bNOT\b]/i.test(v));
+            if (should.length && hasAdvanced(should)) {
+                filters[when].push({
+                    query_string: {
+                        query: should.join(" "),
+                        fields: [fieldName],
+                        default_operator: "OR"
+                    }
+                });
+            } else if (should.length) {
+                filters[when].push({
+                    bool: {
+                        [must_or_should]: should.map(o => (o.startsWith("\"") && o.endsWith("\"")) ? {
+                            term: {
+                                [fieldName.replace("keyword", "raw")]: { value: `${o.slice(1, -1)}` }
+                            }
+                        } : {
+                            wildcard: {
+                                [fieldName]: { value: `*${o}*` }
+                            }
+                        }),
+                    }
+                });
+            }
+            if (must_not.length && hasAdvanced(must_not)) {
+                filters[when].push({
+                    bool: {
+                        must_not: [
+                            {
+                                query_string: {
+                                    query: must_not.join(" "),
+                                    fields: [fieldName],
+                                    default_operator: "OR"
+                                }
+                            }
+                        ]
+                    }
+                });
+            } else if (must_not.length) {
+                filters[when].push({
+                    bool: {
+                        must_not: must_not.map(o => (o.startsWith("\"") && o.endsWith("\"")) ? {
+                            term: {
+                                [fieldName.replace("keyword", "raw")]: { value: `${o.slice(1, -1)}` }
+                            }
+                        } : {
+                            wildcard: {
+                                [fieldName]: { value: `*${o}*` }
+                            }
+                        })
+                    }
+                });
+            }
         }
     }
 

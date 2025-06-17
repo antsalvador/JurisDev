@@ -185,8 +185,8 @@ function JurisprudenciaItem({hit, searchId}:{hit: SearchHandlerResponseItem, sea
                     {area ? area : ""}{area && secao ? " - " : ""}{secao}
                 </div>
             )}
-            {meioProcessual && <div>{meioProcessual}</div>}
-            {relator && <div>{relator}</div>}
+            {meioProcessual && <div><b>Meio Processual:</b> {meioProcessual}</div>}
+            {relator && <div><b>Relator:</b> {relator}</div>}
             {decisao && <div><b>Decisão:</b> {decisao}</div>}
         </div>
         {hit._source?.Sumário? <details className="col-12">

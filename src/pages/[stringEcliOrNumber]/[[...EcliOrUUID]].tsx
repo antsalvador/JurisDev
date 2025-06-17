@@ -123,7 +123,7 @@ function MultipleDocumentPage(props: { docs: JurisprudenciaDocument[], ids: stri
 // Add styles for the text container
 const styles = `
 .acordao-text-container {
-    max-width: 800px;
+    max-width: 900px;
     margin: 0 auto;
     font-size: 1.1rem;
     line-height: 1.6;
@@ -134,14 +134,6 @@ const styles = `
     line-height: 1.7;
     margin-top: 0.25rem;
     padding-top: 0;
-}
-
-@media (min-width: 1200px) {
-    .acordao-text-container {
-        column-count: 2;
-        column-gap: 2rem;
-        max-width: 1200px;
-    }
 }
 `;
 
