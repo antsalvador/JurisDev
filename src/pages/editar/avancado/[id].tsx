@@ -7,7 +7,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter as useNavRouter, useSearchParams } from "next/navigation";
 import { useRouter } from "next/router";
-import { ReadOnlyInput, UpdateInput, HTMLInput, UpdateObject, DateInput, TextInput, UpdateContext, ExactInput, GenericInput, ShowCode } from "@/components/dashboardDoc";
+import { ReadOnlyInput, UpdateInput, HTMLInput, UpdateObject, DateInput, TextInput, UpdateContext, ExactInput, GenericInput, GenericInputOriginalOnly, ShowCode } from "@/components/dashboardDoc";
 import { Loading } from "@/components/loading";
 import { useFetch } from "@/components/useFetch";
 import { GetResponse, WriteResponseBase } from "@elastic/elasticsearch/lib/api/types";
@@ -43,6 +43,9 @@ function Update({ doc, id }: UpdateProps) {
     let keys = useKeysFromContext();
     let [updateObject, setUpdateObject] = useState<UpdateObject>({});
 
+    // Filter keys to only show those with editorEnabled = true
+    const editableKeys = keys.keys.filter(key => key.editorEnabled);
+
     return <UpdateContext.Provider value={[updateObject, setUpdateObject]}>
         <div className="row">
             <div className="col-12 col-md-4">
@@ -55,7 +58,7 @@ function Update({ doc, id }: UpdateProps) {
                 <div className="card shadow">
                     <div className="card-body">
                         <UpdateDocument id={id} />
-                        {keys.keys.map((key, i) => <EditKey key={i} accessKey={key} doc={doc} />)}
+                        {editableKeys.map((key, i) => <EditKey key={i} accessKey={key} doc={doc} />)}
                     </div>
                 </div>
             </div>
@@ -94,7 +97,12 @@ function EditKey({ accessKey, doc }: { accessKey: JurisprudenciaKey, doc: Partia
     if (isJurisprudenciaDocumentDateKey(accessKey.key)) return <DateInput accessKey={accessKey} doc={doc} />
     if (isJurisprudenciaDocumentStateKey(accessKey.key)) return <ExactInput accessKey={accessKey} doc={doc} options={JurisprudenciaDocumentStateValues} />
     if (isJurisprudenciaDocumentExactKey(accessKey.key)) return <ExactInput accessKey={accessKey} doc={doc} />
-    if (isJurisprudenciaDocumentGenericKey(accessKey.key)) return <GenericInput accessKey={accessKey} doc={doc} />
+    if (isJurisprudenciaDocumentGenericKey(accessKey.key)) {
+        if (accessKey.editorOriginalOnly) {
+            return <GenericInputOriginalOnly accessKey={accessKey} doc={doc} />
+        }
+        return <GenericInput accessKey={accessKey} doc={doc} />
+    }
 
     //throw new Error("Unreachable")
     return <>Unreachable</>

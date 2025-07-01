@@ -93,14 +93,14 @@ export default LoggerApi(async function normalizeHandler(
         return Promise.reject(new Error(`Document ${docId} not found in search results`));
       }
       const currentValue = doc[field as keyof JurisprudenciaDocument] as GenericField;
-      if (!currentValue || !currentValue.Show || !currentValue.Original || !currentValue.Index) {
+      if (!currentValue || !currentValue.Show) {
         console.log(`Document ${docId} has invalid field structure for ${field}`);
         return Promise.reject(new Error(`Document ${docId} has invalid field structure for ${field}`));
       }
-      // Replace only the matching value in all arrays
+      // Only update Show, leave Original and Index untouched
       const updatedValue: GenericField = {
+        ...currentValue,
         Show: currentValue.Show.map(v => v === fromValue ? toValue : v),
-        Original: currentValue.Original.map(v => v === fromValue ? toValue : v),
         Index: currentValue.Index.map(v => v === fromValue ? toValue : v)
       };
       return updateDoc(docId, { [field]: updatedValue });

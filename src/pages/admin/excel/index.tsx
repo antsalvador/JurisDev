@@ -7,8 +7,10 @@ import { ExcelFile, ExcelState, FileState } from "@/types/excel";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useEffect, useRef, useState } from "react";
-import NormalizationDashboard from "@/components/NormalizationDashboard";
-import AnalyticsDashboard from "@/components/AnalyticsDashboard";
+import dynamic from 'next/dynamic';
+
+const AnalyticsDashboard = dynamic(() => import('@/components/AnalyticsDashboard'), { ssr: false });
+const NormalizationDashboard = dynamic(() => import('@/components/NormalizationDashboard'), { ssr: false });
 
 export const getServerSideProps = withAuthentication<{}>(async ctx => {
     LoggerServerSideProps(ctx);

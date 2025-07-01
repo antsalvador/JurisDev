@@ -89,7 +89,7 @@ export default function search(
         size: rpp,
         from: page * rpp,
         track_total_hits: true,
-        _source: filterableProps.concat("Sumário"),
+        _source: (filterableProps as any[]).concat("Sumário"),
         ...extras // Allows 
     }))
 }
@@ -131,16 +131,16 @@ export function populateFilters(filters: SearchFilters, body: Partial<Record<str
                     }
                 });
             } else if (should.length) {
-                filters[when].push({
-                    bool: {
+            filters[when].push({
+                bool: {
                         [must_or_should]: should.map(o => (o.startsWith("\"") && o.endsWith("\"")) ? {
-                            term: {
-                                [fieldName.replace("keyword", "raw")]: { value: `${o.slice(1, -1)}` }
-                            }
-                        } : {
-                            wildcard: {
-                                [fieldName]: { value: `*${o}*` }
-                            }
+                        term: {
+                            [fieldName.replace("keyword", "raw")]: { value: `${o.slice(1, -1)}` }
+                        }
+                    } : {
+                        wildcard: {
+                            [fieldName]: { value: `*${o}*` }
+                        }
                         }),
                     }
                 });
@@ -163,16 +163,16 @@ export function populateFilters(filters: SearchFilters, body: Partial<Record<str
                 filters[when].push({
                     bool: {
                         must_not: must_not.map(o => (o.startsWith("\"") && o.endsWith("\"")) ? {
-                            term: {
-                                [fieldName.replace("keyword", "raw")]: { value: `${o.slice(1, -1)}` }
-                            }
-                        } : {
-                            wildcard: {
-                                [fieldName]: { value: `*${o}*` }
-                            }
+                        term: {
+                            [fieldName.replace("keyword", "raw")]: { value: `${o.slice(1, -1)}` }
+                        }
+                    } : {
+                        wildcard: {
+                            [fieldName]: { value: `*${o}*` }
+                        }
                         })
-                    }
-                });
+                }
+            });
             }
         }
     }
@@ -182,42 +182,25 @@ export function populateFilters(filters: SearchFilters, body: Partial<Record<str
     let minAno = Array.isArray(body.MinAno) ? body.MinAno[0] : body.MinAno
     let maxAno = Array.isArray(body.MaxAno) ? body.MaxAno[0] : body.MaxAno
 
-    if (minAno && maxAno) {
-
-        filtersUsed.MinAno = [minAno];
-        filtersUsed.MaxAno = [maxAno];
-        filters[dateWhen].push({
+    if (minAno || maxAno) {
+        const rangeQuery: any = {
             range: {
                 [DATA_FIELD]: {
-                    gte: padZero(minAno),
-                    lt: padZero((parseInt(maxAno) || new Date().getFullYear()) + 1),
-                    format: "yyyy"
+                    format: "yyyy-MM-dd||dd/MM/yyyy"
                 }
             }
-        });
+        };
+        if (minAno) {
+            rangeQuery.range[DATA_FIELD].gte = minAno;
+            filtersUsed.MinAno = [minAno];
+        }
+        if (maxAno) {
+            rangeQuery.range[DATA_FIELD].lte = maxAno;
+            filtersUsed.MaxAno = [maxAno];
+        }
+        filters[dateWhen].push(rangeQuery);
     }
-    else if (minAno) {
-        filtersUsed.MinAno = [minAno];
-        filters[dateWhen].push({
-            range: {
-                [DATA_FIELD]: {
-                    gte: padZero(minAno),
-                    format: "yyyy"
-                }
-            }
-        });
-    }
-    else if (maxAno) {
-        filtersUsed.MaxAno = [maxAno];
-        filters[dateWhen].push({
-            range: {
-                [DATA_FIELD]: {
-                    lt: padZero((parseInt(maxAno) || new Date().getFullYear()) + 1),
-                    format: "yyyy"
-                }
-            }
-        });
-    }
+    
     if (body.notHasField) {
         filtersUsed.notHasField = (Array.isArray(body.notHasField) ? body.notHasField : [body.notHasField]).filter(o => o.length > 0);
         filtersUsed.notHasField.forEach(field => {

@@ -76,7 +76,7 @@ export default function NormalizationDashboard() {
   const [threshold, setThreshold] = useState(0.85); // Default similarity threshold
   const [normalizationState, setNormalizationState] = useState<NormalizationState | null>(null);
   const [pendingNormalization, setPendingNormalization] = useState<{from: string, to: string} | null>(null);
-  const [selectedTargets, setSelectedTargets] = useState<{[key: string]: string}>({});
+  const [selectedTargets, setSelectedTargets] = useState<{[key: string]: {dropdown?: string, custom?: string}}>({});
 
   useEffect(() => {
     setIsClientReady(true);
@@ -369,24 +369,45 @@ export default function NormalizationDashboard() {
                                   </td>
                                   <td style={{color: '#2563eb', fontWeight: 500, fontSize: '1.08em', padding: '6px 0', textAlign: 'center', minWidth: 80}}>{term.doc_count}</td>
                                   <td style={{padding: '6px 0', textAlign: 'center', minWidth: 180, paddingLeft: 32}}>
-                                    <select 
-                                      className="form-select form-select-sm d-inline-block" 
-                                      style={{minWidth: 180, maxWidth: 260, width: '100%'}} 
-                                      value={selectedTargets[term.key] || term.key}
-                                      onChange={e => {
-                                        setSelectedTargets(prev => ({ ...prev, [term.key]: e.target.value }));
-                                      }}
-                                    >
-                                      {dropdownOptions.map((opt, k) => (
-                                        <option key={k} value={opt}>{opt}</option>
-                                      ))}
-                                    </select>
+                                    <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4}}>
+                                      <select 
+                                        className="form-select form-select-sm d-inline-block" 
+                                        style={{minWidth: 180, maxWidth: 260, width: '100%'}} 
+                                        value={selectedTargets[term.key]?.dropdown ?? term.key}
+                                        onChange={e => {
+                                          setSelectedTargets(prev => ({ ...prev, [term.key]: { ...(prev[term.key] || {}), dropdown: e.target.value } }));
+                                        }}
+                                        disabled={(() => {
+                                          const target = selectedTargets[term.key];
+                                          return !!(target?.custom && target.custom.length > 0);
+                                        })()}
+                                      >
+                                        {dropdownOptions.map((opt, k) => (
+                                          <option key={k} value={opt}>{opt}</option>
+                                        ))}
+                                      </select>
+                                      <input
+                                        type="text"
+                                        className="form-control form-control-sm mt-1"
+                                        placeholder="Outro valor..."
+                                        value={selectedTargets[term.key]?.custom || ''}
+                                        onChange={e => {
+                                          setSelectedTargets(prev => ({ ...prev, [term.key]: { ...(prev[term.key] || {}), custom: e.target.value } }));
+                                        }}
+                                        style={{maxWidth: 260}}
+                                      />
+                                    </div>
                                   </td>
                                   <td style={{padding: '6px 0', textAlign: 'right', minWidth: 120}}>
                                     <button 
                                       className="btn btn-primary btn-lg" 
                                       style={{fontSize: '1.08em', padding: '6px 28px'}}
-                                      onClick={() => setPendingNormalization({ from: term.key, to: selectedTargets[term.key] || term.key })}
+                                      onClick={() => {
+                                        const target = selectedTargets[term.key] || {};
+                                        const custom = target.custom;
+                                        const dropdown = target.dropdown ?? term.key;
+                                        setPendingNormalization({ from: term.key, to: (custom && custom.length > 0) ? custom : dropdown });
+                                      }}
                                       disabled={normalizationState?.isNormalizing}
                                     >
                                       Normalizar
