@@ -50,33 +50,10 @@ export default function Indices(props: IndicesPageProps){
 function IndicesTable(props: IndicesPageProps){
     let router = useRouter()
     let searchParams = useSearchParams();
-    const [state, setState] = useState<IndicesProps | null>(null);
-    const [loading, setLoading] = useState(false);
+    let state = useFetch<IndicesProps>(`/api/indices?${searchParams.toString()}`,[])
 
-    const handleAnalyze = async () => {
-        setLoading(true);
-        try {
-            const response = await fetch(`/api/indices?${searchParams.toString()}`);
-            const data = await response.json();
-            setState(data);
-        } catch (error) {
-            console.error("Failed to fetch indices data", error);
-            setState(null);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (loading) {
-        return <Loading />;
-    }
-    
-    if (!state) {
-        return (
-            <div className="text-center p-5">
-                <p>Clique em "Analisar" para carregar os dados.</p>
-            </div>
-        );
+    if( !state ){
+        return <Loading />
     }
 
     let {sortedGroup, termAggregation} = state;
@@ -85,62 +62,44 @@ function IndicesTable(props: IndicesPageProps){
     }
     // Gold no highlight retirar o texto
     return <>
-        <div className="d-flex justify-content-end mb-3">
-            <button onClick={handleAnalyze} className="btn btn-primary" disabled={loading}>
-                {loading ? 'Analisando...' : 'Analisar'}
-            </button>
-        </div>
-
-        {loading && <Loading />}
-
-        {!loading && !state && (
-             <div className="text-center p-5 border rounded">
-                <p className="mb-0">Selecione os parâmetros e clique em "Analisar" para carregar os dados.</p>
-            </div>
-        )}
-
-        {state && (
-            <>
-                {(state.termAggregation.sum_other_doc_count || 0) > 0 && <div className="alert alert-warning" role="alert">
-                    <h5 className="alert-heading">
-                        <strong><i className="bi bi-exclamation-circle"></i> Atenção:</strong> 
-                    </h5>
-                    <ul>
-                        <li>Existem {state.termAggregation.sum_other_doc_count} outros valores não listados.</li>
-                    </ul>
-                </div>}
-                <table className="table table-sm" style={{width: "fit-content"}}>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Índice <a href={`${router.basePath}/api/indices.csv?${searchParams.toString()}`} className="ms-1" download="indices.csv"><i className="bi bi-filetype-csv"></i></a><a href={`${router.basePath}/api/indices.xlsx?${searchParams.toString()}`} className="ms-1" download="indices.xlsx"><i className="bi bi-filetype-xlsx"></i></a></th>
-                            <th className="text-end-border-end">
-                                <SelectGroup group={props.group}/>
-                            </th>
-                            {sortedGroup.map(([name, count],i) => <td key={i} className="text-end border-end">{name == INDICES_OTHERS || props.group in props.filtersUsed ? name : <Link href={`?${modifySearchParams(searchParams, props.group, `"${name}"`)}`}>{name}</Link>}</td>)}
-                            <th></th>
-                            <th className="text-start">Datas</th>
-                        </tr>
-                        <tr>
-                            <th>{termAggregation.buckets.length}</th>
-                            <th>
-                                <SelectTerm term={props.term}/>
-                            </th>
-                            <th className="text-end border-end"><Link href={`/pesquisa?${searchParams.toString()}`}>{termAggregation.buckets.reduce((acc, b)=> acc+b.doc_count, 0)}</Link></th>
-                            {sortedGroup.map(([name,count], i) => <td key={i} className="text-end border-end"><Link href={`/pesquisa?${modifySearchParams(searchParams, props.group, `"${name}"`)}`}>{count}</Link></td>)}
-                            <th></th>
-                            <th className="text-start">de ... até</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {termAggregation.buckets.length <= props.limits && termAggregation.buckets.map( (b, i) => <ShowBucketRow key={i} index={i} bucket={b} filtersUsed={props.filtersUsed} searchParams={searchParams} term={props.term} group={props.group} sortedGroup={sortedGroup} />)}
-                    </tbody>
-                </table>
-                {termAggregation.buckets.length > props.limits && <div className="d-flex flex-wrap">
-                    {termAggregation.buckets.map( (b, i) => <ShowBucketLine key={i} index={i} bucket={b} filtersUsed={props.filtersUsed} searchParams={searchParams} term={props.term} group={props.group} sortedGroup={sortedGroup} />)}
-                </div>}
-            </>
-        )}
+        {(termAggregation.sum_other_doc_count || 0) > 0 && <div className="alert alert-warning" role="alert">
+            <h5 className="alert-heading">
+                <strong><i className="bi bi-exclamation-circle"></i> Atenção:</strong> 
+            </h5>
+            <ul>
+                <li>Existem {termAggregation.sum_other_doc_count} outros valores não listados.</li>
+            </ul>
+        </div>}
+        <table className="table table-sm" style={{width: "fit-content"}}>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Índice <a href={`${router.basePath}/api/indices.csv?${searchParams.toString()}`} className="ms-1" download="indices.csv"><i className="bi bi-filetype-csv"></i></a><a href={`${router.basePath}/api/indices.xlsx?${searchParams.toString()}`} className="ms-1" download="indices.xlsx"><i className="bi bi-filetype-xlsx"></i></a></th>
+                    <th className="text-end-border-end">
+                        <SelectGroup group={props.group}/>
+                    </th>
+                    {sortedGroup.map(([name, count],i) => <td key={i} className="text-end border-end">{name == INDICES_OTHERS || props.group in props.filtersUsed ? name : <Link href={`?${modifySearchParams(new URLSearchParams(searchParams.toString()), props.group, `"${name}"`)}`}>{name}</Link>}</td>)}
+                    <th></th>
+                    <th className="text-start">Datas</th>
+                </tr>
+                <tr>
+                    <th>{termAggregation.buckets.length}</th>
+                    <th>
+                        <SelectTerm term={props.term}/>
+                    </th>
+                    <th className="text-end border-end"><Link href={`/pesquisa?${searchParams.toString()}`}>{termAggregation.buckets.reduce((acc, b)=> acc+b.doc_count, 0)}</Link></th>
+                    {sortedGroup.map(([name,count], i) => <td key={i} className="text-end border-end"><Link href={`/pesquisa?${modifySearchParams(new URLSearchParams(searchParams.toString()), props.group, `"${name}"`)}`}>{count}</Link></td>)}
+                    <th></th>
+                    <th className="text-start">de ... até</th>
+                </tr>
+            </thead>
+            <tbody>
+                {termAggregation.buckets.length <= props.limits && termAggregation.buckets.map( (b, i) => <ShowBucketRow key={i} index={i} bucket={b} filtersUsed={props.filtersUsed} searchParams={new URLSearchParams(searchParams.toString())} term={props.term} group={props.group} sortedGroup={sortedGroup} />)}
+            </tbody>
+        </table>
+        {termAggregation.buckets.length > props.limits && <div className="d-flex flex-wrap">
+            {termAggregation.buckets.map( (b, i) => <ShowBucketLine key={i} index={i} bucket={b} filtersUsed={props.filtersUsed} searchParams={new URLSearchParams(searchParams.toString())} term={props.term} group={props.group} sortedGroup={sortedGroup} />)}
+        </div>}
     </>
 }
 
@@ -163,7 +122,7 @@ function SelectTerm(props: {term: string}){
     </SelectNavigate>    
 }
 
-function ShowBucketRow(props: {bucket: any, index: number, term: string, group: string, filtersUsed: Record<string, string[]>, searchParams: ReadonlyURLSearchParams, sortedGroup: [string, number][]}){
+function ShowBucketRow(props: {bucket: any, index: number, term: string, group: string, filtersUsed: Record<string, string[]>, searchParams: URLSearchParams, sortedGroup: [string, number][]}){
     let group = props.bucket.Group;
     const othersCount = group ? group.sum_other_doc_count + group.buckets.reduce((acc: number, b: any) => acc + (props.sortedGroup.find(([s, n]) => s == b.key) != null ? 0 : b.doc_count), 0) : 0;
     return <tr>
@@ -187,7 +146,7 @@ function ShowBucketRow(props: {bucket: any, index: number, term: string, group: 
     </tr>
 }
 
-function ShowBucketLine(props: {bucket: any, index: number, term: string, group: string, filtersUsed: Record<string, string[]>, searchParams: ReadonlyURLSearchParams, sortedGroup: [string, number][]}){
+function ShowBucketLine(props: {bucket: any, index: number, term: string, group: string, filtersUsed: Record<string, string[]>, searchParams: URLSearchParams, sortedGroup: [string, number][]}){
     return <div className="mx-2">
         <Link href={`/indices?${addSearchParams(new URLSearchParams(props.searchParams), props.term, `"${props.bucket.key}"`)}`}>{props.bucket.key}</Link> ({props.bucket.doc_count})
     </div>

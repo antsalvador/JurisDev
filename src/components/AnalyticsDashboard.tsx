@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
+// @ts-ignore
+const { format } = require('d3-format');
 import { useRouter } from 'next/router';
 import AdvancedFilters from './AdvancedFilters';
+import MatrixChart from './Matrix';
+import StackedBarChart from './StackedBar';
 
 interface Bucket {
   key: string;
@@ -38,15 +42,13 @@ interface TermFrequencyData {
 }
 
 const CHARTS = [
-  { key: 'bar', label: 'Top Termos' },
-  { key: 'donut', label: 'Proporção' },
-  { key: 'hist', label: 'Distribuição de Frequências' },
-  { key: 'trend', label: 'Tendência Temporal' },
-  { key: 'timeline', label: 'Registros por Período' }
+  { key: 'timeline', label: 'Frequência Temporal' },
+  { key: 'rare', label: 'Termos Raros' },
+  { key: 'cooccurrence', label: 'Co-ocorrência de Termos' },
+  { key: 'outcomes', label: 'Distribuição de Decisões' }
 ];
 
 const TIME_PERIODS = [
-  { key: 'day', label: 'Dia' },
   { key: 'week', label: 'Semana' },
   { key: 'month', label: 'Mês' },
   { key: 'year', label: 'Ano' }
@@ -93,6 +95,14 @@ function useDebounce(value: any, delay: number) {
   return debouncedValue;
 }
 
+// Dashboard descriptions for each chart type
+const DASHBOARD_DESCRIPTIONS: Record<string, string> = {
+  timeline: 'Visualize a frequência de registros ao longo do tempo, com filtros de metadados e texto livre.',
+  rare: 'Descubra termos raros nos metadados selecionados, filtrando por campo, datas e número máximo de ocorrências.',
+  cooccurrence: 'Explore a co-ocorrência entre termos de diferentes campos nos registros.',
+  outcomes: 'Veja a distribuição das decisões para o campo selecionado.'
+};
+
 export default function AnalyticsDashboard() {
   const router = useRouter();
   const [filters, setFilters] = useState<AnalyticsFilters>({
@@ -118,6 +128,17 @@ export default function AnalyticsDashboard() {
   const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesData[]>([]);
   const [isClientReady, setIsClientReady] = useState(false);
   const [fetchTrigger, setFetchTrigger] = useState(0);
+  const [rareField, setRareField] = useState('Decisão');
+  const [rareValues, setRareValues] = useState<any[]>([]);
+  const [rareMinCount, setRareMinCount] = useState(1);
+  const [matrixData, setMatrixData] = useState<any>(null);
+  const [outcomeData, setOutcomeData] = useState<any>(null);
+  const [matrixFieldX, setMatrixFieldX] = useState('Descritores');
+  const [matrixFieldY, setMatrixFieldY] = useState('Meio Processual');
+  const [matrixTermLimit, setMatrixTermLimit] = useState(10);
+  const [matrixXTerms, setMatrixXTerms] = useState<string[]>([]);
+  const [matrixYTerms, setMatrixYTerms] = useState<string[]>([]);
+  const [outcomeField, setOutcomeField] = useState('Decisão');
   
   const barRef = useRef<HTMLDivElement>(null);
   const pieRef = useRef<HTMLDivElement>(null);
@@ -317,9 +338,6 @@ export default function AnalyticsDashboard() {
     router.push(`/editar/${record._source.UUID || record._source.ECLI}`);
   };
 
-  // Get rare values (count = 1)
-  const rareValues = buckets.filter(b => b.doc_count === 1);
-
   // Modern Bar Chart
   useEffect(() => {
     if (selectedChart !== 'bar' || !barRef.current || buckets.length === 0) return;
@@ -328,16 +346,16 @@ export default function AnalyticsDashboard() {
     const width = 600, barHeight = 36, margin = { top: 30, right: 40, bottom: 40, left: 220 };
     const height = margin.top + margin.bottom + barHeight * data.length;
     const svg = d3.select(barRef.current)
-        .append('svg')
+      .append('svg')
       .attr('width', '100%')
       .attr('height', height)
       .attr('viewBox', `0 0 ${width} ${height}`);
-      const x = d3.scaleLinear()
+    const x = d3.scaleLinear()
       .domain([0, d3.max(data, d => d.doc_count) || 1])
-        .range([margin.left, width - margin.right]);
-      const y = d3.scaleBand()
+      .range([margin.left, width - margin.right]);
+    const y = d3.scaleBand()
       .domain(data.map(d => d.key))
-        .range([margin.top, height - margin.bottom])
+      .range([margin.top, height - margin.bottom])
       .padding(0.18);
 
     // Gradient
@@ -350,15 +368,15 @@ export default function AnalyticsDashboard() {
     gradient.append('stop').attr('offset', '100%').attr('stop-color', '#2563eb');
 
     // Bars
-      svg.append('g')
-        .selectAll('rect')
+    svg.append('g')
+      .selectAll('rect')
       .data(data)
-        .enter()
-        .append('rect')
-        .attr('x', x(0))
-        .attr('y', d => y(d.key)!)
-        .attr('width', d => x(d.doc_count) - x(0))
-        .attr('height', y.bandwidth())
+      .enter()
+      .append('rect')
+      .attr('x', x(0))
+      .attr('y', d => y(d.key)!)
+      .attr('width', d => x(d.doc_count) - x(0))
+      .attr('height', y.bandwidth())
       .attr('rx', 10)
       .attr('fill', 'url(#bar-gradient)')
       .attr('filter', 'drop-shadow(0px 2px 8px rgba(37,99,235,0.10))')
@@ -392,7 +410,7 @@ export default function AnalyticsDashboard() {
     // Y axis
     svg.append('g')
       .attr('transform', `translate(${margin.left},0)`)
-      .call(d3.axisLeft(y).tickSizeOuter(0))
+      .call(d3.axisLeft(y).tickSizeOuter(0).tickFormat(format('d')))
       .selectAll('text')
       .attr('font-size', 16)
       .attr('font-weight', 500);
@@ -621,7 +639,7 @@ export default function AnalyticsDashboard() {
       
       svg.append('g')
         .attr('transform', `translate(${margin.left},0)`)
-        .call(d3.axisLeft(y));
+        .call(d3.axisLeft(y).tickFormat(format('d')));
       
       // Title
       svg.append('text')
@@ -675,10 +693,10 @@ export default function AnalyticsDashboard() {
     const y = d3.scaleLinear()
       .domain([0, d3.max(histData, d => d.count) || 1])
       .range([height - margin.bottom, margin.top]);
-      svg.append('g')
+    svg.append('g')
       .selectAll('rect')
       .data(histData)
-        .enter()
+      .enter()
       .append('rect')
       .attr('x', d => x(d.freq.toString())!)
       .attr('y', d => y(d.count))
@@ -697,10 +715,10 @@ export default function AnalyticsDashboard() {
     gradient.append('stop').attr('offset', '100%').attr('stop-color', '#10b981');
     svg.append('g')
       .attr('transform', `translate(0,${height - margin.bottom})`)
-      .call(d3.axisBottom(x).tickFormat(d => d));
+      .call(d3.axisBottom(x).tickFormat(format('d')));
     svg.append('g')
       .attr('transform', `translate(${margin.left},0)`)
-      .call(d3.axisLeft(y));
+      .call(d3.axisLeft(y).tickFormat(format('d')));
     svg.append('text')
       .attr('x', width / 2)
       .attr('y', margin.top - 12)
@@ -747,7 +765,7 @@ export default function AnalyticsDashboard() {
     setFetchTrigger(prev => prev + 1);
   };
 
-  // --- Data Fetching Effect ---
+
   useEffect(() => {
     if (!isClientReady || fetchTrigger === 0) return;
 
@@ -756,64 +774,98 @@ export default function AnalyticsDashboard() {
     setTimeSeriesData([]); // Clear previous data
 
     const params = new URLSearchParams();
-    
     // Add filters to params
     if (filters.dateRange.start) params.append('MinAno', filters.dateRange.start);
     if (filters.dateRange.end) params.append('MaxAno', filters.dateRange.end);
     params.append('timePeriod', filters.timePeriod);
-
     filters.metadataFilters.forEach(filter => {
       if (filter.field && filter.value) {
         params.append(filter.field, filter.value);
       }
     });
-
     if (filters.freeTextQuery.trim()) {
       params.append('q', filters.freeTextQuery.trim());
     }
-    
-    fetch(`/api/timeline?${params.toString()}`)
+    fetch(`/api/analytics-timeline?${params.toString()}`)
       .then(res => {
         if (!res.ok) throw new Error(`Erro na resposta da rede: ${res.statusText}`);
         return res.json();
       })
-      .then((documents: any[]) => {
-        if (!Array.isArray(documents)) {
-             throw new Error("Formato de dados inválido recebido do servidor.");
+      .then((buckets: any[]) => {
+        if (!Array.isArray(buckets)) {
+          throw new Error("Formato de dados inválido recebido do servidor.");
         }
-        const countsByDate: Record<string, { count: number; eclis: string[] }> = {};
-
-        documents.forEach(doc => {
-          if (!doc || !doc.Data) return;
-          const date = new Date(doc.Data);
-          let key: string;
-
-          if (filters.timePeriod === 'day') key = date.toISOString().split('T')[0];
-          else if (filters.timePeriod === 'week') {
-            const day = date.getDay();
-            const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-            key = new Date(date.setDate(diff)).toISOString().split('T')[0];
-          } else if (filters.timePeriod === 'month') key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
-          else key = `${date.getFullYear()}-01-01`;
-          
-          if (!countsByDate[key]) countsByDate[key] = { count: 0, eclis: [] };
-          countsByDate[key].count++;
-          if (doc.ECLI) countsByDate[key].eclis.push(doc.ECLI);
-        });
-
-        const formattedData = Object.entries(countsByDate).map(([date, data]) => ({
-          date,
-          count: data.count,
-          timestamp: new Date(date).getTime(),
-          eclis: data.eclis
-        })).sort((a, b) => a.timestamp - b.timestamp);
-
-        setTimeSeriesData(formattedData);
+        // API already returns {date, count, eclis}
+        setTimeSeriesData(buckets.map(b => ({
+          ...b,
+          timestamp: new Date(b.date).getTime()
+        })));
       })
       .catch((err) => setError('Erro ao carregar dados temporais. ' + err.message))
       .finally(() => setLoading(false));
-
   }, [fetchTrigger, isClientReady]);
+
+  // Fetch rare values when chart or filters change
+  useEffect(() => {
+    if (selectedChart !== 'rare' || !isClientReady || fetchTrigger === 0) return;
+    setLoading(true);
+    setError(null);
+    setRareValues([]);
+    const params = new URLSearchParams();
+    if (filters.dateRange.start) params.append('MinAno', filters.dateRange.start);
+    if (filters.dateRange.end) params.append('MaxAno', filters.dateRange.end);
+    params.append('timePeriod', filters.timePeriod);
+    params.append('field', rareField);
+    params.append('maxCount', rareMinCount.toString());
+    filters.metadataFilters.forEach(filter => {
+      if (filter.field && filter.value) {
+        params.append(filter.field, filter.value);
+      }
+    });
+    if (filters.freeTextQuery.trim()) {
+      params.append('q', filters.freeTextQuery.trim());
+    }
+    fetch(`/api/analytics-rare-values?${params.toString()}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Erro na resposta da rede: ${res.statusText}`);
+        return res.json();
+      })
+      .then((data: any[]) => setRareValues(data))
+      .catch((err) => setError('Erro ao carregar valores raros. ' + err.message))
+      .finally(() => setLoading(false));
+  }, [selectedChart, rareField, filters, fetchTrigger, isClientReady, rareMinCount]);
+
+  // Fetch co-occurrence matrix data
+  useEffect(() => {
+    if (selectedChart !== 'cooccurrence') return;
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams();
+    params.append('termMatrix1', matrixFieldY);
+    params.append('termMatrix2', matrixFieldX);
+    params.append('limit', '20');
+    if (filters.dateRange.start) params.append('MinAno', filters.dateRange.start);
+    if (filters.dateRange.end) params.append('MaxAno', filters.dateRange.end);
+    fetch(`/api/matrix?${params.toString()}`)
+      .then(res => res.json())
+      .then(json => { setMatrixData(json); setLoading(false); })
+      .catch(() => { setError('Erro ao carregar matriz de coocorrência.'); setLoading(false); });
+  }, [selectedChart, matrixFieldX, matrixFieldY, filters.dateRange.start, filters.dateRange.end]);
+
+  // Fetch decision outcome breakdown data
+  useEffect(() => {
+    if (selectedChart !== 'outcomes') return;
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams();
+    params.append('field', outcomeField);
+    if (filters.dateRange.start) params.append('MinAno', filters.dateRange.start);
+    if (filters.dateRange.end) params.append('MaxAno', filters.dateRange.end);
+    fetch(`/api/stackedbar?${params.toString()}`)
+      .then(res => res.json())
+      .then(json => { setOutcomeData(json); setLoading(false); })
+      .catch(() => { setError('Erro ao carregar distribuição de decisões.'); setLoading(false); });
+  }, [selectedChart, outcomeField, filters.dateRange.start, filters.dateRange.end]);
 
   // Render Time Series Chart
   useEffect(() => {
@@ -938,7 +990,7 @@ export default function AnalyticsDashboard() {
         .attr("dy", ".15em")
         .attr("transform", "rotate(-45)");
     
-    svg.append('g').call(d3.axisLeft(y));
+    svg.append('g').call(d3.axisLeft(y).tickFormat(format('d')));
     
     svg.append('text')
       .attr('x', width / 2)
@@ -950,6 +1002,54 @@ export default function AnalyticsDashboard() {
 
   }, [timeSeriesData, isClientReady, filters]); // Re-render chart if data or filters change
   
+  // When matrixData loads, set default top 20 terms for each axis
+  useEffect(() => {
+    if (selectedChart !== 'cooccurrence' || !matrixData || !matrixData.matrix || !matrixData.matrix.buckets) return;
+    const matrixBuckets = matrixData.matrix.buckets;
+    const topY = matrixBuckets
+      .map((bucket: any) => ({ key: bucket.key, count: bucket.doc_count }))
+      .sort((a: any, b: any) => b.count - a.count)
+      .slice(0, 20)
+      .map((bucket: any) => bucket.key);
+    const allBuckets = matrixBuckets.flatMap((bucket: any) => bucket.matrix.buckets);
+    const topX = (Array.from(new Set(allBuckets.map((bucket: any) => bucket.key))) as string[])
+      .map((key: string) => ({ key, count: allBuckets.find((b: any) => b.key === key)?.doc_count || 0 }))
+      .sort((a: any, b: any) => b.count - a.count)
+      .slice(0, 20)
+      .map((b: any) => b.key);
+    setMatrixXTerms(topX as string[]);
+    setMatrixYTerms(topY as string[]);
+  }, [matrixData, selectedChart, matrixFieldX, matrixFieldY]);
+
+  // Handlers for editing axis terms
+  const handleMatrixXTermChange = (i: number, value: string) => {
+    setMatrixXTerms(terms => terms.map((t, idx) => idx === i ? value : t));
+  };
+  const handleMatrixYTermChange = (i: number, value: string) => {
+    setMatrixYTerms(terms => terms.map((t, idx) => idx === i ? value : t));
+  };
+  const handleResetMatrixX = () => {
+    if (!matrixData || !matrixData.matrix || !matrixData.matrix.buckets) return;
+    const matrixBuckets = matrixData.matrix.buckets;
+    const topX = matrixBuckets
+      .map((bucket: any) => ({ key: bucket.key, count: bucket.doc_count }))
+      .sort((a: any, b: any) => b.count - a.count)
+      .slice(0, 20)
+      .map((bucket: any) => bucket.key);
+    setMatrixXTerms(topX as string[]);
+  };
+  const handleResetMatrixY = () => {
+    if (!matrixData || !matrixData.matrix || !matrixData.matrix.buckets) return;
+    const matrixBuckets = matrixData.matrix.buckets;
+    const allBuckets = matrixBuckets.flatMap((bucket: any) => bucket.matrix.buckets);
+    const topY = (Array.from(new Set(allBuckets.map((bucket: any) => bucket.key))) as string[])
+      .map((key: string) => ({ key, count: allBuckets.find((b: any) => b.key === key)?.doc_count || 0 }))
+      .sort((a: any, b: any) => b.count - a.count)
+      .slice(0, 20)
+      .map((b: any) => b.key);
+    setMatrixYTerms(topY as string[]);
+  };
+
   if (!isClientReady) return null;
 
   // --- Render JSX ---
@@ -959,50 +1059,75 @@ export default function AnalyticsDashboard() {
         <div className="col-12">
           <div className="card shadow-sm my-4" style={{border: 'none', background: '#fff'}}>
             <div className="card-body" style={{fontFamily: 'Inter, Arial, sans-serif'}}>
-              <h2 className="mb-2" style={{ fontSize: '2rem', fontWeight: 500 }}>Análise de Frequência Temporal</h2>
-              <p className="mb-4 text-muted">Esta ferramenta permite analisar a frequência de termos ao longo do tempo, combinando campos de metadados com pesquisa de texto livre.</p>
+              <h2 className="mb-2" style={{ fontSize: '2rem', fontWeight: 500 }}>Dashboard de Análise Gráfica</h2>
+              <p className="mb-4 text-muted">{DASHBOARD_DESCRIPTIONS[selectedChart] || ''}</p>
               
               <div className="row">
                 {/* --- Left Sidebar: Controls --- */}
                 <div className="col-md-3">
                   <div className="mb-4">
                     <label className="form-label fw-semibold">Tipo de Gráfico</label>
-                    <select className="form-select" value="timeline" disabled>
-                      <option value="timeline">Frequência Temporal</option>
+                    <select className="form-select" value={selectedChart} onChange={e => setSelectedChart(e.target.value)}>
+                      {CHARTS.map(chart => <option key={chart.key} value={chart.key}>{chart.label}</option>)}
+                    </select>
+        </div>
+                  {/* Timeline sidebar controls */}
+                  {selectedChart === 'timeline' && <>
+                    <div className="mb-4">
+                      <label className="form-label fw-semibold">Filtros de Metadados</label>
+                      {filters.metadataFilters.map((filter) => (
+                        <div key={filter.id} className="d-flex align-items-center mb-2">
+                          <select className="form-select form-select-sm me-1" value={filter.field} onChange={e => handleFilterChange(filter.id, 'field', e.target.value)}>
+                            {AVAILABLE_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
             </select>
+                          <input type="text" className="form-control form-control-sm" placeholder="Valor" value={filter.value} onChange={e => handleFilterChange(filter.id, 'value', e.target.value)} />
+                          <button className="btn btn-sm btn-outline-danger ms-1" onClick={() => removeFilter(filter.id)}>&times;</button>
           </div>
-                  
-                  <div className="mb-4">
-                    <label className="form-label fw-semibold">Filtros de Metadados</label>
-                    {filters.metadataFilters.map((filter) => (
-                      <div key={filter.id} className="d-flex align-items-center mb-2">
-                        <select className="form-select form-select-sm me-1" value={filter.field} onChange={e => handleFilterChange(filter.id, 'field', e.target.value)}>
+                      ))}
+                      <button className="btn btn-sm btn-outline-primary" onClick={addFilter}>+ Adicionar Filtro</button>
+                    </div>
+                    <div className="mb-4">
+                      <label className="form-label fw-semibold">Pesquisa de Texto Livre</label>
+                      <input type="text" className="form-control" placeholder="Termo adicional..." value={filters.freeTextQuery} onChange={e => setFilters(prev => ({ ...prev, freeTextQuery: e.target.value }))} />
+                    </div>
+                  </>}
+                  {/* Rare terms sidebar controls */}
+                  {selectedChart === 'rare' && <>
+                    <div style={{background: '#f8fafc', borderRadius: 12, padding: '1.2rem 1.2rem 1.5rem 1.2rem', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 24, border: '1px solid #e5e7eb'}}>
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold" style={{fontSize: '1.08em', color: '#374151'}}>Campo para Termos Raros</label>
+                        <select className="form-select" value={rareField} onChange={e => setRareField(e.target.value)} style={{fontWeight: 500, fontSize: '1em', borderRadius: 8, border: '1px solid #d1d5db'}}>
                           {AVAILABLE_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
-                        </select>
-                        <input type="text" className="form-control form-control-sm" placeholder="Valor" value={filter.value} onChange={e => handleFilterChange(filter.id, 'value', e.target.value)} />
-                        <button className="btn btn-sm btn-outline-danger ms-1" onClick={() => removeFilter(filter.id)}>&times;</button>
-                      </div>
-                    ))}
-                    <button className="btn btn-sm btn-outline-primary" onClick={addFilter}>+ Adicionar Filtro</button>
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="form-label fw-semibold">Pesquisa de Texto Livre</label>
-                    <input type="text" className="form-control" placeholder="Termo adicional..." value={filters.freeTextQuery} onChange={e => setFilters(prev => ({ ...prev, freeTextQuery: e.target.value }))} />
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="form-label fw-semibold">Período Temporal</label>
-                    <select className="form-select" value={filters.timePeriod} onChange={e => setFilters(prev => ({ ...prev, timePeriod: e.target.value }))} disabled={loading}>
-                      {TIME_PERIODS.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}
             </select>
           </div>
-
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold" style={{fontSize: '1.08em', color: '#374151'}}>Ocorrências mínimas</label>
+                        <input type="range" min={1} max={5} step={1} value={rareMinCount} onChange={e => setRareMinCount(Number(e.target.value))} className="form-range" style={{width: '100%'}} />
+                        <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.95em', color: '#888'}}>
+                          <span>1</span>
+                          <span>5</span>
+        </div>
+                        <div style={{fontSize: '0.92em', color: '#888', marginTop: 2}}>
+                          Mostrar termos com até <b>{rareMinCount}</b> ocorrência(s)
+                        </div>
+                      </div>
+                      <div className="mb-2" style={{borderTop: '1px solid #e5e7eb', margin: '1.2rem 0 0.5rem 0'}}></div>
+                    </div>
+                  </>}
+                  {/* Time period and calendar for both charts */}
+                  {selectedChart === 'timeline' && (
+          <div className="mb-4">
+                      <label className="form-label fw-semibold">Período Temporal</label>
+                      <select className="form-select" value={filters.timePeriod} onChange={e => setFilters(prev => ({ ...prev, timePeriod: e.target.value }))} disabled={loading}>
+                        {TIME_PERIODS.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}
+            </select>
+          </div>
+        )}
                   <div className="mb-4">
                     <label className="form-label fw-semibold">Intervalo de Datas (Opcional)</label>
                     <div className="mb-2">
                       <input type="date" className="form-control form-control-sm" value={filters.dateRange.start} onChange={e => setFilters(prev => ({ ...prev, dateRange: { ...prev.dateRange, start: e.target.value } }))} disabled={loading} />
-                    </div>
+        </div>
                     <div>
                       <input type="date" className="form-control form-control-sm" value={filters.dateRange.end} onChange={e => setFilters(prev => ({ ...prev, dateRange: { ...prev.dateRange, end: e.target.value } }))} disabled={loading} />
                     </div>
@@ -1010,7 +1135,6 @@ export default function AnalyticsDashboard() {
                       Limpar Datas
                     </button>
                   </div>
-
                   <div className="d-grid">
                     <button className="btn btn-primary" onClick={handleApplyFilters} disabled={loading}>
                       {loading ? (
@@ -1018,6 +1142,50 @@ export default function AnalyticsDashboard() {
                       ) : 'Aplicar Filtros'}
                     </button>
                   </div>
+                  {/* Co-occurrence Matrix field selectors */}
+                  {selectedChart === 'cooccurrence' && (
+                    <div style={{background: '#f8fafc', borderRadius: 12, padding: '1.2rem', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 24, border: '1px solid #e5e7eb'}}>
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold">Campo das Linhas (Y)</label>
+                        <select className="form-select" value={matrixFieldY} onChange={e => setMatrixFieldY(e.target.value)}>
+                          {AVAILABLE_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold">Campo das Colunas (X)</label>
+                        <select className="form-select" value={matrixFieldX} onChange={e => setMatrixFieldX(e.target.value)}>
+                          {AVAILABLE_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold">Eixo Y (Linhas)</label>
+                        <div style={{maxHeight: 320, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8, background: '#fff'}}>
+                          {matrixYTerms.map((term, i) => (
+                            <input key={i} value={term} onChange={e => handleMatrixYTermChange(i, e.target.value)} style={{width: '100%', marginBottom: 4, fontSize: '0.98em', borderRadius: 4, border: '1px solid #d1d5db', padding: '2px 8px'}} />
+                          ))}
+                          <button className="btn btn-sm btn-outline-secondary mt-2" onClick={handleResetMatrixY}>Resetar Top 20</button>
+                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold">Eixo X (Colunas)</label>
+                        <div style={{maxHeight: 320, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8, background: '#fff'}}>
+                          {matrixXTerms.map((term, i) => (
+                            <input key={i} value={term} onChange={e => handleMatrixXTermChange(i, e.target.value)} style={{width: '100%', marginBottom: 4, fontSize: '0.98em', borderRadius: 4, border: '1px solid #d1d5db', padding: '2px 8px'}} />
+                          ))}
+                          <button className="btn btn-sm btn-outline-secondary mt-2" onClick={handleResetMatrixX}>Resetar Top 20</button>
+                        </div>
+                      </div>
+          </div>
+        )}
+                  {/* Outcome Breakdown field selector */}
+                  {selectedChart === 'outcomes' && (
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold">Campo de Decisão</label>
+                      <select className="form-select" value={outcomeField} onChange={e => setOutcomeField(e.target.value)}>
+                        {AVAILABLE_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {/* --- Main Chart Area --- */}
@@ -1031,21 +1199,172 @@ export default function AnalyticsDashboard() {
                     {error && (
                       <div className="d-flex justify-content-center align-items-center h-100 p-3">
                         <div className="alert alert-danger w-100">{`Erro ao carregar dados: ${error}`}</div>
-        </div>
+                      </div>
                     )}
-                    {!loading && !error && fetchTrigger > 0 && timeSeriesData.length === 0 && (
+                    {!loading && !error && fetchTrigger > 0 && selectedChart === 'timeline' && timeSeriesData.length === 0 && (
                        <div className="d-flex justify-content-center align-items-center h-100">
                          <div className="text-muted">Nenhum dado encontrado para os critérios selecionados.</div>
-          </div>
-        )}
-                     <div ref={chartRef} style={{width: '100%', height: '100%'}} />
+                       </div>
+                    )}
+                    {!loading && !error && fetchTrigger > 0 && selectedChart === 'rare' && rareValues.length === 0 && (
+                       <div className="d-flex justify-content-center align-items-center h-100">
+                         <div className="text-muted">Nenhum termo raro encontrado para os critérios selecionados.</div>
+                       </div>
+                    )}
+                    {/* Timeline Chart */}
+                    {selectedChart === 'timeline' && <div ref={chartRef} style={{width: '100%', height: '100%'}} />}
+                    {/* Rare Values Horizontal Bar Chart */}
+                    {selectedChart === 'rare' && (
+                      <RareValuesHorizontalBarChart data={rareValues} field={rareField} filters={filters} />
+                    )}
+                    {/* Co-occurrence Matrix Chart */}
+                    {selectedChart === 'cooccurrence' && matrixData && (
+                      <MatrixChart
+                        data={matrixData}
+                        xTerms={matrixXTerms}
+                        yTerms={matrixYTerms}
+                        xField={matrixFieldX}
+                        yField={matrixFieldY}
+                        onDataSelect={() => {}}
+                      />
+                    )}
+                    {/* Decision Outcome Breakdown Chart */}
+                    {selectedChart === 'outcomes' && outcomeData && (
+                      <StackedBarChart sData={outcomeData} onDataSelect={() => {}} />
+                    )}
                   </div>
                 </div>
               </div>
-        </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+// --- Rare Values Minimalistic Tag UI ---
+function RareValuesHorizontalBarChart({ data, field, filters }: { data: any[], field: string, filters: any }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.innerHTML = '';
+
+    if (!data.length) {
+      ref.current.innerHTML = '<div class="text-center text-muted p-4">Nenhum termo raro encontrado.</div>';
+      return;
+    }
+
+    // Sort rare terms alphabetically
+    const sorted = [...data].sort((a, b) => a.term.localeCompare(b.term));
+
+    const container = d3.select(ref.current);
+
+    // Header
+    container.append('div')
+      .style('margin-bottom', '1.5rem')
+      .style('fontSize', '1.1rem')
+      .style('fontWeight', '500')
+      .style('color', '#374151')
+      .text(`${sorted.length} termos raros encontrados`);
+
+    // Tag container
+    const tagWrap = container.append('div')
+      .style('display', 'flex')
+      .style('flex-wrap', 'wrap')
+      .style('gap', '0.35rem')
+      .style('margin-top', '0.2rem')
+      .style('background', '#f8fafc')
+      .style('border-radius', '8px')
+      .style('padding', '0.7rem 0.5rem 0.5rem 0.5rem')
+      .style('border', '1px solid #e5e7eb')
+      .style('max-height', '580px')
+      .style('overflow', 'auto')
+      .style('position', 'relative');
+
+    // Only show up to 100 terms visually, but keep all for search
+    const visibleTerms = sorted.slice(0, 100);
+    const hiddenCount = sorted.length - visibleTerms.length;
+
+    // Create pill tags
+    const tags = tagWrap.selectAll('.rare-term-tag')
+      .data(visibleTerms)
+      .enter()
+      .append('div')
+      .attr('class', 'rare-term-tag')
+      .style('display', 'inline-flex')
+      .style('flex-direction', 'row')
+      .style('align-items', 'center')
+      .style('padding', '0.28rem 0.7rem 0.28rem 0.6rem')
+      .style('background', '#f1f5fd')
+      .style('border-radius', '999px')
+      .style('font-size', '0.97rem')
+      .style('color', '#1e293b')
+      .style('font-weight', '500')
+      .style('box-shadow', '0 1px 3px rgba(59,130,246,0.04)')
+      .style('border', '1.5px solid #b6c3d6')
+      .style('cursor', 'pointer')
+      .style('transition', 'background 0.15s, box-shadow 0.15s, border 0.15s, transform 0.12s')
+      .on('mouseenter', function() {
+        d3.select(this)
+          .style('background', '#e0e7ef')
+          .style('box-shadow', '0 2px 8px rgba(59,130,246,0.10)')
+          .style('border', '1.5px solid #2563eb')
+          .style('transform', 'translateY(-1px) scale(1.01)');
+      })
+      .on('mouseleave', function() {
+        d3.select(this)
+          .style('background', '#f1f5fd')
+          .style('box-shadow', '0 1px 3px rgba(59,130,246,0.04)')
+          .style('border', '1.5px solid #b6c3d6')
+          .style('transform', 'none');
+      })
+      .on('click', (event, d) => {
+        const params = new URLSearchParams();
+        params.append(field, d.term);
+        if (filters.dateRange.start) params.append('MinAno', filters.dateRange.start);
+        if (filters.dateRange.end) params.append('MaxAno', filters.dateRange.end);
+        window.open(`/pesquisa?${params.toString()}`, '_blank');
+      });
+
+    // Term text (left)
+    tags.append('span')
+      .style('margin-right', '0.5rem')
+      .style('white-space', 'nowrap')
+      .style('font-size', '0.97rem')
+      .style('font-weight', '500')
+      .text(d => d.term);
+
+    // Occurrence badge (right)
+    tags.append('span')
+      .style('background', '#fee2a7')
+      .style('color', '#b45309')
+      .style('font-size', '0.80rem')
+      .style('font-weight', '600')
+      .style('border-radius', '12px')
+      .style('padding', '0.10rem 0.6rem')
+      .style('margin-left', '0.3rem')
+      .style('box-shadow', '0 1px 2px rgba(251,191,36,0.08)')
+      .text(d => `${d.count} ocorrência${d.count > 1 ? 's' : ''}`);
+
+    // If there are more terms, show a '+N mais' indicator
+    if (hiddenCount > 0) {
+      tagWrap.append('div')
+        .style('position', 'sticky')
+        .style('bottom', '0')
+        .style('left', '0')
+        .style('width', '100%')
+        .style('background', 'linear-gradient(0deg, #f8fafc 80%, transparent)')
+        .style('text-align', 'center')
+        .style('padding', '0.5rem 0 0.2rem 0')
+        .style('font-size', '0.98em')
+        .style('color', '#888')
+        .style('font-weight', '500')
+        .text(`+${hiddenCount} mais`);
+    }
+
+  }, [data, field, filters]);
+
+  return <div ref={ref} style={{width: '100%', minHeight: 200}} />;
 } 

@@ -192,12 +192,12 @@ export function populateFilters(filters: SearchFilters, body: Partial<Record<str
         };
         if (minAno) {
             rangeQuery.range[DATA_FIELD].gte = minAno;
-            filtersUsed.MinAno = [minAno];
+        filtersUsed.MinAno = [minAno];
         }
         if (maxAno) {
             rangeQuery.range[DATA_FIELD].lte = maxAno;
-            filtersUsed.MaxAno = [maxAno];
-        }
+        filtersUsed.MaxAno = [maxAno];
+                }
         filters[dateWhen].push(rangeQuery);
     }
     

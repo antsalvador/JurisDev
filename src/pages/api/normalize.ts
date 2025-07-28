@@ -97,7 +97,7 @@ export default LoggerApi(async function normalizeHandler(
         console.log(`Document ${docId} has invalid field structure for ${field}`);
         return Promise.reject(new Error(`Document ${docId} has invalid field structure for ${field}`));
       }
-      // Only update Show, leave Original and Index untouched
+      // Update de Mostrar, deixar Original e Index igual
       const updatedValue: GenericField = {
         ...currentValue,
         Show: currentValue.Show.map(v => v === fromValue ? toValue : v),

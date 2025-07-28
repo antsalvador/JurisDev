@@ -39,23 +39,27 @@ export default LoggerApi(async function normalizationIssuesHandler(
 
   try {
     const client = await getElasticSearchClient();
-    // Get all unique values for the field
+    const pageSize = parseInt(req.query.size) || 1500;
+    const after = req.query.after ? JSON.parse(req.query.after) : undefined;
+
     const result = await client.search({
+      index: 'your_index',
       size: 0,
       aggs: {
-        unique_values: {
-          terms: {
-            field: esField,
-            size: 10000 // Adjust this based on your needs
+        terms_paged: {
+          composite: {
+            size: pageSize,
+            sources: [
+              { term: { terms: { field: esField } } }
+            ],
+            ...(after ? { after } : {})
           }
         }
       }
     });
 
-    const buckets = (result.aggregations?.unique_values as AggregationsStringTermsAggregate).buckets;
-    if (!Array.isArray(buckets)) {
-      return res.status(500).json({ error: 'Invalid aggregation result' });
-    }
+    const buckets = result.aggregations.terms_paged.buckets;
+    const after_key = result.aggregations.terms_paged.after_key || null;
 
     // Convert buckets to array of terms with counts
     const terms = buckets.map(bucket => ({
@@ -63,9 +67,20 @@ export default LoggerApi(async function normalizationIssuesHandler(
       count: bucket.doc_count
     }));
 
+    // After getting allBuckets (the full array of term buckets)
+    const page = parseInt(req.query.page) || 1;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const pagedBuckets = terms.slice(start, end);
+
     return res.json({
       normalization: [], // No clusters, just flat list
-      rawTerms: terms
+      rawTerms: terms,
+      termAggregation: {
+        buckets: pagedBuckets,
+        after_key,
+        total: terms.length
+      }
     });
   } catch (error) {
     console.error('Error fetching normalization issues:', error);

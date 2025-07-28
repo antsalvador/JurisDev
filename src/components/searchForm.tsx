@@ -175,23 +175,18 @@ export default function SearchForm({ count, filtersUsed, minAno, maxAno }: { cou
                                         tabIndex={0}
                                     />
                                     {idx > 0 && (
-                                        <OverlayTrigger
-                                            placement="top"
-                                            overlay={<Tooltip id={`op-tooltip-${idx}`}>Escolha o operador lógico</Tooltip>}
+                                        <select
+                                            className="form-select form-select-sm ms-1 me-1"
+                                            value={opValue}
+                                            onChange={e => handleAdvancedChange(idx, "op", e.target.value)}
+                                            style={{ width: 70 }}
+                                            tabIndex={0}
+                                            aria-label="Operador lógico"
                                         >
-                                            <select
-                                                className="form-select form-select-sm ms-1 me-1"
-                                                value={opValue}
-                                                onChange={e => handleAdvancedChange(idx, "op", e.target.value)}
-                                                style={{ width: 70 }}
-                                                tabIndex={0}
-                                                aria-label="Operador lógico"
-                                            >
-                                                <option value="AND">E</option>
-                                                <option value="OR">OU</option>
-                                                <option value="NOT">NÃO</option>
-                                            </select>
-                                        </OverlayTrigger>
+                                            <option value="AND">E</option>
+                                            <option value="OR">OU</option>
+                                            <option value="NOT">NÃO</option>
+                                        </select>
                                     )}
                                     {advancedRows.length > 1 && (
                                         <OverlayTrigger
